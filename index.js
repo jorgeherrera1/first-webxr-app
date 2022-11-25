@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import WebGL from './WebGL.js';
 import { ARButton } from 'https://unpkg.com/three@0.145.0/examples/jsm/webxr/ARButton.js';
+import { GLTFLoader } from 'https://unpkg.com/three@0.145.0/examples/jsm/loaders/GLTFLoader.js';
 
-let camera, scene, renderer;
-let icosahedron, torus;
+let camera, scene, renderer, loader;
+let icosahedron, torus, model;
 
 init();
 
@@ -57,7 +58,19 @@ function init() {
 	const modelUrl = 'https://raw.githubusercontent.com/immersive-web/webxr-samples/main/media/gltf/space/space.gltf';
 
 	// loader object. GLTF loader
-	
+	loader = new GLTFLoader();
+	loader.load(
+		modelUrl,
+		// gets called when model has finished loading
+		(gltf) => {
+			model = gltf.scene;
+			model.position.y = 5;
+			scene.add(model);
+		},
+		(event) => {
+			console.log(event);
+		}
+	);
 
 	// Button to start WebXR
 	const button = ARButton.createButton(renderer);
@@ -91,5 +104,14 @@ function render() {
 	torus.rotation.x += 0.01;
 	torus.rotation.y += 0.01;
 
+	rotateModel();
+
 	renderer.render(scene, camera);
+}
+
+function rotateModel() {
+	if (model !== undefined) {
+		model.rotation.y -= 0.0002; //radians
+		// model.rotation.y = THREE.MathUtils.degToRad(degrees);
+	}
 }
