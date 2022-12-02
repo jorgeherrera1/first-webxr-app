@@ -3,7 +3,7 @@ import WebGL from "./WebGL.js";
 import { ARButton } from "https://unpkg.com/three@0.145.0/examples/jsm/webxr/ARButton.js";
 import { GLTFLoader } from "https://unpkg.com/three@0.145.0/examples/jsm/loaders/GLTFLoader.js";
 
-let camera, scene, renderer, loader;
+let camera, scene, renderer, loader, controller;
 let icosahedron, torus, model;
 
 init();
@@ -78,6 +78,11 @@ function init() {
       }
    );
 
+   controller = renderer.xr.getController(0);
+   controller.addEventListener('select', onSelect);
+   scene.add(controller);
+   console.log(controller);
+
    // Button to start WebXR
    const button = ARButton.createButton(renderer);
    document.body.appendChild(button);
@@ -90,6 +95,23 @@ function init() {
       const warning = WebGL.getWebGLErrorMessage();
       document.body.appendChild(warning);
    }
+}
+
+function onSelect() {
+   const coneGeometry = new THREE.ConeGeometry(0.1, 0.2, 32).rotateX(Math.PI / 2);
+   const coneMaterial = new THREE.MeshPhongMaterial({
+      color: 0xffffff * Math.random(),
+      shininess: 6,
+      flatShading: true,
+      transparent: 1,
+      opacity: 0.8
+   });
+   const cone = new THREE.Mesh(coneGeometry, coneMaterial);
+
+   cone.position.set(0, 0, -0.6).applyMatrix4(controller.matrixWorld);
+   cone.quaternion.setFromRotationMatrix(controller.matrixWorld); // rotate the object to point to the camera
+
+   scene.add(cone);
 }
 
 function onWindowResize() {
