@@ -5,6 +5,7 @@ import { GLTFLoader } from "https://unpkg.com/three@0.145.0/examples/jsm/loaders
 
 let camera, scene, renderer, loader, controller;
 let icosahedron, torus, model;
+let reticle, hitTestInitialized = false, hitTestSource, localSpace;
 
 init();
 
@@ -81,10 +82,13 @@ function init() {
    controller = renderer.xr.getController(0);
    controller.addEventListener('select', onSelect);
    scene.add(controller);
-   console.log(controller);
+   
+   addReticleToScreen();
 
    // Button to start WebXR
-   const button = ARButton.createButton(renderer);
+   const button = ARButton.createButton(renderer, {
+      requiredFeatures: ['hit-test']
+   });
    document.body.appendChild(button);
 
    if (WebGL.isWebGLAvailable()) {
@@ -95,6 +99,20 @@ function init() {
       const warning = WebGL.getWebGLErrorMessage();
       document.body.appendChild(warning);
    }
+}
+
+function addReticleToScreen() {
+   const circleGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
+   const circleMaterial = new THREE.MeshBasicMaterial();
+   reticle = new THREE.Mesh(circleGeometry, circleMaterial);
+
+   // we will calculate the position and rotation every frame manually
+   reticle.matrixAutoUpdate = false;
+
+   // reticle will start not visible
+   reticle.visible = false;
+
+   scene.add(reticle);
 }
 
 function onSelect() {
@@ -125,16 +143,61 @@ function animate() {
    renderer.setAnimationLoop(render);
 }
 
-function render() {
-   icosahedron.rotation.x += 0.01;
-   icosahedron.rotation.y += 0.01;
+function render(timestamp, frame) {
+   if (frame) {
+      // create hit test source and keep it for all frames
+      if (!hitTestInitialized) {
+         initializeHitTestSource();
+      } else {
+         // hit test can find multiple surfaces so it returns an array.
+         // the first one is the closest one to the camera
+         const hitTestResults = frame.getHitTestResults(hitTestSource);
+         
+         if (hitTestResults.length > 0) {
+            const hit = hitTestResults[0]; // closest to the camera
 
-   torus.rotation.x += 0.01;
-   torus.rotation.y += 0.01;
+            // represents a point on a surface
+            // we use local space because even if we move the camera, we still want the object to remain there
+            const pose = hit.getPose(localSpace); 
 
-   rotateModel();
+            reticle.visible = true;
+            reticle.matrix.fromArray(pose.transform.matrix);
+         } else { // there is no surface
+            reticle.visible = false;
+         }
+      }
 
-   renderer.render(scene, camera);
+      icosahedron.rotation.x += 0.01;
+      icosahedron.rotation.y += 0.01;
+   
+      torus.rotation.x += 0.01;
+      torus.rotation.y += 0.01;
+   
+      rotateModel();
+   
+      renderer.render(scene, camera);
+   }
+}
+
+async function initializeHitTestSource() {
+   // get the current session of XR
+   const session = renderer.xr.getSession();
+
+   // for hit testing, we want the phone to be the origin of the coordinate system
+   const viewerSpace = await session.requestReferenceSpace('viewer');
+   hitTestSource = await session.requestHitTestSource({space: viewerSpace});
+   console.log(hitTestSource);
+
+   // we want to use the 'local' reference space for drawing things
+   localSpace = await session.requestReferenceSpace('local');
+   console.log(localSpace);
+
+   hitTestInitialized = true;
+
+   session.addEventListener('end', () => {
+      hitTestInitialized = false;
+      hitTestSource = null;
+   })
 }
 
 function rotateModel() {
